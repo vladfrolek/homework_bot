@@ -67,7 +67,6 @@ def get_api_answer(timestamp):
             return response.json()
     except requests.RequestException:
         raise ConnectionError('Сбой при запросе к эндпоинту')
-    
 
 
 def check_response(response):
