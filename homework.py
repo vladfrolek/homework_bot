@@ -6,7 +6,6 @@ import time
 from dotenv import load_dotenv
 import requests
 import telegram
-from telegram import TelegramError
 
 from exceptions import TokenError
 
@@ -33,12 +32,12 @@ HOMEWORK_VERDICTS = {
 
 def check_tokens():
     """Проверяет значения переменных окружения."""
-    token_list = (
+    tokens = (
         'PRACTICUM_TOKEN',
         'TELEGRAM_TOKEN',
         'TELEGRAM_CHAT_ID'
     )
-    empty_tokens = [token for token in token_list if not globals()[token]]
+    empty_tokens = [token for token in tokens if not globals()[token]]
     if empty_tokens:
         msg = f'Отсутсвует переменная окружения {empty_tokens}'
         logger.critical(msg)
@@ -49,7 +48,7 @@ def send_message(bot, text):
     """Отправляет сообщение в ТГ."""
     try:
         bot.send_message(TELEGRAM_CHAT_ID, text)
-    except TelegramError:
+    except telegram.TelegramError:
         logger.error('Ошибка при отправке сообщения в телеграмм')
     else:
         logger.debug("Cообщение отправлено")
@@ -62,10 +61,13 @@ def get_api_answer(timestamp):
         response = requests.get(ENDPOINT, headers=HEADERS, params=payload)
         if response.status_code != 200:
             raise requests.RequestException('Endpoint недоступен')
-        # return response.json()
+        if not response.json():
+            raise requests.exceptions.InvalidJSONError
+        else:
+            return response.json()
     except requests.RequestException:
         raise ConnectionError('Сбой при запросе к эндпоинту')
-    return response.json()
+    
 
 
 def check_response(response):
@@ -73,9 +75,9 @@ def check_response(response):
     if not isinstance(response, dict):
         raise TypeError('Not dict')
     if 'current_date' not in response:
-        raise KeyError('Key "current_date" not found')
+        logger.warning('Key "current_date" not found')
     if not isinstance(response.get('current_date'), int):
-        raise TypeError('not int')
+        logger.warning('not int')
     if 'homeworks' not in response:
         raise KeyError('Key "homeworks" not found')
     if not isinstance(response.get('homeworks'), list):
@@ -93,7 +95,7 @@ def parse_status(homework):
         raise KeyError('Неожиданный статус домашней работы')
     verdict = HOMEWORK_VERDICTS.get(status)
     if not verdict:
-        raise KeyError('Неожиданный статус домашней работы')
+        raise ValueError('Неожиданный статус домашней работы')
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
