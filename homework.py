@@ -60,13 +60,15 @@ def get_api_answer(timestamp):
     try:
         response = requests.get(ENDPOINT, headers=HEADERS, params=payload)
         if response.status_code != 200:
-            raise requests.RequestException('Endpoint недоступен')
-        if not response.json():
-            raise requests.exceptions.InvalidJSONError
-        else:
-            return response.json()
-    except requests.RequestException:
-        raise ConnectionError('Сбой при запросе к эндпоинту')
+            raise requests.HTTPError('Ошибка запроса к Endpoint.'
+                                     'Код ответа отличный от 200 ')
+        try:
+            response = response.json()
+        except requests.exceptions.JSONDecodeError:
+            print('Ответ содержит недопустимый JSON')
+        return response
+    except requests.RequestException as error:
+        raise ConnectionError(f'Возникла ошибка подключения {error}')
 
 
 def check_response(response):
@@ -74,9 +76,9 @@ def check_response(response):
     if not isinstance(response, dict):
         raise TypeError('Not dict')
     if 'current_date' not in response:
-        logger.warning('Key "current_date" not found')
+        logger.error('Key "current_date" not found')
     if not isinstance(response.get('current_date'), int):
-        logger.warning('not int')
+        logger.error('not int')
     if 'homeworks' not in response:
         raise KeyError('Key "homeworks" not found')
     if not isinstance(response.get('homeworks'), list):
