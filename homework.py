@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import sys
@@ -62,23 +63,18 @@ def get_api_answer(timestamp):
         if response.status_code != 200:
             raise requests.HTTPError('Ошибка запроса к Endpoint.'
                                      'Код ответа отличный от 200 ')
-        try:
-            response = response.json()
-        except requests.exceptions.JSONDecodeError:
-            print('Ответ содержит недопустимый JSON')
-        return response
+        response = response.json()
+    except json.JSONDecodeError:
+        raise json.JSONDecodeError('Ответ не содержит валидный JSON')
     except requests.RequestException as error:
         raise ConnectionError(f'Возникла ошибка подключения {error}')
+    return response
 
 
 def check_response(response):
     """Проверяет ответ API на соответствие структур данных."""
     if not isinstance(response, dict):
         raise TypeError('Not dict')
-    if 'current_date' not in response:
-        logger.error('Key "current_date" not found')
-    if not isinstance(response.get('current_date'), int):
-        logger.error('not int')
     if 'homeworks' not in response:
         raise KeyError('Key "homeworks" not found')
     if not isinstance(response.get('homeworks'), list):
@@ -112,7 +108,12 @@ def main():
             if current_homework:
                 verdict = parse_status(current_homework[0])
                 send_message(bot, verdict)
-            timestamp = homework['current_date']
+            if not homework.get('current_date'):
+                logger.error('Отсутсвует "current_date" в ответе')
+            elif not isinstance(homework.get('current_date'), int):
+                logger.error('current_date в ответе не int')
+            else:
+                timestamp = homework['current_date']
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
             logger.error(message)
@@ -125,7 +126,10 @@ if __name__ == '__main__':
     logging.basicConfig(
         format=('%(asctime)s - %(name)s - %(levelname)s - line %(lineno)s - '
                 '%(funcName)s - %(message)s'),
-        level=logging.DEBUG
+        level=logging.DEBUG,
+        filename='main.log',
+        filemode='w',
+        encoding='utf-8'
     )
     logging.StreamHandler(sys.stdout)
     try:
