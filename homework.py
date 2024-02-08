@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 import requests
 import telegram
 
-from exceptions import TokenError
+from exceptions import InvalidJSONError, TokenError
 
 
 load_dotenv()
@@ -19,7 +19,7 @@ PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
-RETRY_PERIOD = 600
+RETRY_PERIOD = 5
 ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 
@@ -65,7 +65,7 @@ def get_api_answer(timestamp):
                                      'Код ответа отличный от 200 ')
         response = response.json()
     except json.JSONDecodeError:
-        raise json.JSONDecodeError('Ответ не содержит валидный JSON')
+        raise InvalidJSONError('Ответ не содержит валидный JSON')
     except requests.RequestException as error:
         raise ConnectionError(f'Возникла ошибка подключения {error}')
     return response
@@ -79,6 +79,10 @@ def check_response(response):
         raise KeyError('Key "homeworks" not found')
     if not isinstance(response.get('homeworks'), list):
         raise TypeError('not list')
+    if not response.get('current_date'):
+        logger.error('Отсутсвует "current_date" в ответе')
+    elif not isinstance(response.get('current_date'), int):
+        logger.error('current_date в ответе не int')
     return response.get('homeworks')
 
 
@@ -108,12 +112,7 @@ def main():
             if current_homework:
                 verdict = parse_status(current_homework[0])
                 send_message(bot, verdict)
-            if not homework.get('current_date'):
-                logger.error('Отсутсвует "current_date" в ответе')
-            elif not isinstance(homework.get('current_date'), int):
-                logger.error('current_date в ответе не int')
-            else:
-                timestamp = homework['current_date']
+            timestamp = homework.get('current_date', int(time.time()))
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
             logger.error(message)
@@ -127,9 +126,6 @@ if __name__ == '__main__':
         format=('%(asctime)s - %(name)s - %(levelname)s - line %(lineno)s - '
                 '%(funcName)s - %(message)s'),
         level=logging.DEBUG,
-        filename='main.log',
-        filemode='w',
-        encoding='utf-8'
     )
     logging.StreamHandler(sys.stdout)
     try:
