@@ -8,7 +8,12 @@ from dotenv import load_dotenv
 import requests
 import telegram
 
-from exceptions import InvalidJSONError, TokenError
+from exceptions import (
+    CurrentDateError,
+    CurrentDateTypeError,
+    InvalidJSONError,
+    TokenError
+)
 
 
 load_dotenv()
@@ -64,11 +69,11 @@ def get_api_answer(timestamp):
             raise requests.HTTPError('Ошибка запроса к Endpoint.'
                                      'Код ответа отличный от 200 ')
         response = response.json()
+        return response
     except json.JSONDecodeError:
         raise InvalidJSONError('Ответ не содержит валидный JSON')
     except requests.RequestException as error:
         raise ConnectionError(f'Возникла ошибка подключения {error}')
-    return response
 
 
 def check_response(response):
@@ -80,9 +85,9 @@ def check_response(response):
     if not isinstance(response.get('homeworks'), list):
         raise TypeError('not list')
     if not response.get('current_date'):
-        logger.error('Отсутсвует "current_date" в ответе')
-    elif not isinstance(response.get('current_date'), int):
-        logger.error('current_date в ответе не int')
+        raise CurrentDateError('Отсутсвует "current_date" в ответе')
+    if not isinstance(response.get('current_date'), int):
+        raise CurrentDateTypeError('current_date в ответе не int')
     return response.get('homeworks')
 
 
@@ -113,6 +118,8 @@ def main():
                 verdict = parse_status(current_homework[0])
                 send_message(bot, verdict)
             timestamp = homework.get('current_date', int(time.time()))
+        except (CurrentDateError, CurrentDateTypeError) as error:
+            logger.error(error)
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
             logger.error(message)
